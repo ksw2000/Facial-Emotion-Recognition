@@ -1,4 +1,4 @@
-# liar_detection_app
+# facial_emotion_recognition
 
 A new Flutter application.
 

@@ -15,19 +15,18 @@ class ImagePrehandle {
   }
 
   // return [[r,g,b], [r,g,b], ...]
+  /*
   List<List<double>> uint32ListToRGBFloat(img.Image src) {
-    List<List<double>> rgb = [];
-    // e is ##AARRGGBB
+    List<List<double>> rgb = List.filled(src.data.length, [0, 0, 0]);
+    // e is ##AABBGGRR
+    int i = 0;
     src.data.forEach((e) {
-      var tmp = e;
-      var r = tmp % 256;
-      tmp -= r;
-      tmp ~/= 256;
-      var g = tmp % 256;
-      tmp -= g;
-      tmp ~/= 256;
-      var b = tmp % 256;
-      rgb.add([r / 255.0, g / 255.0, b / 255.0]);
+      rgb[i][0] = (e & 255) / 255.0;
+      e = (e >> 8);
+      rgb[i][1] = (e & 255) / 255.0;
+      e = (e >> 8);
+      rgb[i][2] = (e & 255) / 255.0;
+      i = i + 1;
     });
     return rgb;
   }
@@ -42,39 +41,34 @@ class ImagePrehandle {
     }
     return dest;
   }
+   */
 
-  /*
-  List ABGRCodeToList(int abgr) {
-    var r = abgr % 256;
-    abgr -= r;
-    abgr ~/= 256;
-    var g = abgr % 256;
-    abgr -= g;
-    abgr ~/= 256;
-    var b = abgr % 256;
-    return [r / 255.0, g / 255.0, b / 255.0];
+  List<List<List<double>>> uint32ListToRGB3D(img.Image src) {
+    List<List<List<double>>> rgb =
+        List.filled(src.width, List.filled(src.height, [0, 0, 0]));
+
+    int k = 0;
+    int e;
+    for (int i = 0; i < src.width; i++) {
+      for (int j = 0; j < src.height; j++) {
+        e = src.data[k++];
+        // e is ##AABBGGRR
+        rgb[i][j][0] = (e & 255) / 255.0;
+        e = (e >> 8);
+        rgb[i][j][1] = (e & 255) / 255.0;
+        e = (e >> 8);
+        rgb[i][j][2] = (e & 255) / 255.0;
+      }
+    }
+    print(rgb);
+    return rgb;
   }
 
-  img.Image RGBFloatList3DToUint32(
-      List<List<List<dynamic>>> rgbList, width, height) {
-    List<int> list = [];
-    rgbList.forEach((e) {
-      e.forEach((f) {
-        list.add((f[0] * 255).toInt());
-        list.add((f[1] * 255).toInt());
-        list.add((f[2] * 255).toInt());
-      });
-    });
-    print(list);
-    return img.Image.fromBytes(
-      width,
-      height,
-      list,
-      format: img.Format.rgb,
-    );
-  }
-*/
   img.Image crop(img.Image src, {int x, int y, int w, int h}) {
     return img.copyCrop(src, x, y, w, h);
+  }
+
+  img.Image resize(img.Image src, {int w, int h}) {
+    return img.copyResize(src, width: w, height: h);
   }
 }

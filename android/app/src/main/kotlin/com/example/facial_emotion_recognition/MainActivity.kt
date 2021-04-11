@@ -1,4 +1,4 @@
-package com.example.liar_detection_app
+package com.example.facial_emotion_recognition
 
 import io.flutter.embedding.android.FlutterActivity
 

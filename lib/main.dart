@@ -1,13 +1,35 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:opencv/opencv.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:image/image.dart' as img;
-import 'package:liar_detection_app/classifier.dart';
-import 'package:liar_detection_app/prehandle.dart';
+import './classifier.dart';
+import './prehandle.dart';
+
+const int shotSize = 500;
+const facial = ['驚訝', '怕爆', '噁心', '開勳', '桑心', '森77', '無'];
+int max(List<num> list) {
+  if (list == null || list?.length == 0) return null;
+  int index = 0;
+  for (int i = 0; i < list.length; i++) {
+    if (list[i] > list[index]) {
+      index = i;
+    }
+  }
+  return index;
+}
+
+int min(List<num> list) {
+  if (list == null || list?.length == 0) return null;
+  int index = 0;
+  for (int i = 0; i < list.length; i++) {
+    if (list[i] < list[index]) {
+      index = i;
+    }
+  }
+  return index;
+}
 
 Future<void> main() async {
   // Ensure that plugin services are initialized so that `availableCameras()`
@@ -45,36 +67,32 @@ class TakePictureScreen extends StatefulWidget {
 }
 
 class TakePictureScreenState extends State<TakePictureScreen> {
-  CameraController _controller;
+  CameraController _cameraCtrl;
   Future<void> _initializeControllerFuture;
   String text;
+  Widget preview;
 
   @override
   void initState() {
     super.initState();
-    // To display the current output from the Camera,
-    // create a CameraController.
-    _controller = CameraController(
-        // Get a specific camera from the list of available cameras.
-        widget.camera,
-        // Define the resolution to use.
-        ResolutionPreset.high,
-        enableAudio: true);
-
-    // Next, initialize the controller. This returns a Future.
-    _initializeControllerFuture = _controller.initialize();
+    _cameraCtrl =
+        CameraController(widget.camera, ResolutionPreset.high, // 1280x720
+            enableAudio: true);
+    _initializeControllerFuture = _cameraCtrl.initialize();
     text = "";
   }
 
   @override
   void dispose() {
-    // Dispose of the controller when the widget is disposed.
-    //_controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    double ratio = MediaQuery.of(context).size.width / 720;
+    double top = (1280 - shotSize) / 2;
+    double right = (720 - shotSize) / 2;
+
     return Scaffold(
       body: SafeArea(
           child: FutureBuilder<void>(
@@ -84,9 +102,20 @@ class TakePictureScreenState extends State<TakePictureScreen> {
             // If the Future is complete, display the preview.
             return Stack(
               children: [
-                CameraPreview(_controller),
-                Box.square(top: 0.0, right: 0.0, side: 50.0),
-                Center(child: Text(text ?? "", style: TextStyle(fontSize: 20)))
+                CameraPreview(
+                  _cameraCtrl,
+                ),
+                Box.square(
+                    top: top,
+                    right: right,
+                    side: shotSize.toDouble(),
+                    ratio: ratio),
+                Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Text(text ?? "", style: TextStyle(fontSize: 50))),
+                (preview != null)
+                    ? Align(alignment: Alignment.topRight, child: preview)
+                    : Container()
               ],
             );
           } else {
@@ -99,6 +128,13 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         child: Icon(Icons.camera_alt),
         // Provide an onPressed callback.
         onPressed: () async {
+          print("click");
+          /*
+          _controller.startImageStream((CameraImage getImage) {
+            print("line66");
+            print(getImage.width);
+          });
+          */
           // Take the Picture in a try / catch block. If anything goes wrong,
           // catch the error.
           try {
@@ -106,18 +142,26 @@ class TakePictureScreenState extends State<TakePictureScreen> {
             await _initializeControllerFuture;
 
             // Attempt to take a picture and log where it's been saved.
-            await _controller.takePicture().then((XFile file) async {
+            await _cameraCtrl.takePicture().then((XFile file) async {
               if (mounted) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CallModel(image: file),
-                  ),
-                );
+                runModel(
+                    image: file,
+                    top: top,
+                    right: right,
+                    callback: (img.Image i) {
+                      setState(() {
+                        preview =
+                            Image.memory(img.JpegEncoder().encodeImage(i));
+                      });
+                    }).then((res) {
+                  setState(() {
+                    print(res);
+                    text = res;
+                  });
+                });
               }
             });
           } catch (e) {
-            // If an error occurs, log the error to the console.
             print(e);
           }
         },
@@ -126,130 +170,77 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   }
 }
 
-// A widget that displays the picture taken by the user.
-class CallModel extends StatefulWidget {
-  const CallModel({this.image});
-  final XFile image;
+Future<String> runModel(
+    {XFile image, double right: 0, double top: 0, Function callback}) async {
+  try {
+    /// Pixels are encoded into 4-byte Uint32 integers in #AABBGGRR channel order.
+    ImagePrehandle preHandle = ImagePrehandle(await image.readAsBytes());
+    Classifier cls = Classifier();
 
-  @override
-  _CallModelState createState() => _CallModelState();
-}
+    var interpreter = await cls.loadModel('fe.tflite');
 
-class _CallModelState extends State<CallModel> {
-  XFile imageFile;
-  Widget previewCroppedImage = Container();
+    // 3D list
+    // crop's direction vertical top x = 0, horizontal right: y = 0
+    preHandle.image = preHandle.crop(preHandle.image,
+        y: right.toInt(), x: top.toInt(), w: shotSize, h: shotSize);
+    preHandle.image = preHandle.resize(preHandle.image,
+        w: cls.inputShape[1], h: cls.inputShape[2]);
 
-  @override
-  initState() {
-    super.initState();
-    imageFile = widget.image;
-  }
-
-  Future<String> run() async {
-    try {
-      /// Pixels are encoded into 4-byte Uint32 integers in #AABBGGRR channel order.
-      String ret = "";
-      ImagePrehandle preHandle = ImagePrehandle(await imageFile.readAsBytes());
-      Classifier cls = Classifier();
-      await cls.loadModel('fe.tflite').then((interpreter) {
-        print("loadmodel()");
-        print("input shape: ${cls.inputShape}");
-        print("output shape: ${cls.outputShape}");
-
-        // 3D list
-        img.Image croppedImage = preHandle.crop(preHandle.image,
-            x: 0, y: 0, w: cls.inputShape[1], h: cls.inputShape[2]);
-        dynamic input = preHandle.reshape(
-            preHandle.uint32ListToRGBFloat(croppedImage),
-            cls.inputShape[1],
-            cls.inputShape[2]);
-        previewCroppedImage =
-            Image.memory(img.JpegEncoder().encodeImage(croppedImage));
-
-        if (interpreter != null) {
-          print("run");
-          int outputSize = 1;
-          cls.outputShape.forEach((e) {
-            outputSize *= e;
-          });
-          var output = List.filled(outputSize, 0).reshape(cls.outputShape);
-          cls.run([input], output);
-          var res = cls.decide(output[0]);
-          ret = "情緒 ${res["label"]}號 ${res["val"] * 100 ~/ res["sum"]}%";
-          print(ret);
-        }
-      });
-
-      return ret;
-      // var res = await ImgProc.gaussianBlur(imageByte, [45, 45], 0);
-      // var res2 =
-      // await ImgProc.resize(imageByte, [500, 500], 0, 0, ImgProc.interArea);
-    } on PlatformException {
-      print('Failed to get platform version.');
-    } catch (e) {
-      print(e);
+    // check the photo after cropped and resized
+    if (callback != null) {
+      callback(preHandle.image);
     }
-    return "錯誤";
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    var _ctrl = ScrollController();
-    return Scaffold(
-        appBar: AppBar(title: Text('Show result')),
-        // The image is stored as a file on the device. Use the `Image.file`
-        // constructor with the given path to display the image.
-        body: Scrollbar(
-            controller: _ctrl,
-            child: SingleChildScrollView(
-                controller: _ctrl,
-                child: Column(
-                  children: [
-                    Image.file(File(imageFile.path)),
-                    FutureBuilder(
-                        future: run(),
-                        builder: (buildContext, snapshot) {
-                          if (snapshot.hasData) {
-                            print(snapshot.data);
-                            return previewCroppedImage;
-                            // Image.memory(croppedImage?.getBytes()
-                            // return Image.memory(
-                            // img.JpegEncoder().encodeImage(preHandle.imgDecode));
-                          } else {
-                            return CircularProgressIndicator();
-                          }
-                        })
-                  ],
-                ))));
+    dynamic input = preHandle.uint32ListToRGB3D(preHandle.image);
+
+    if (interpreter != null) {
+      int outputSize = 1;
+      cls.outputShape.forEach((e) {
+        outputSize *= e;
+      });
+      var output = List.filled(outputSize, 0).reshape(cls.outputShape);
+      cls.run([input], output);
+      print(output);
+      print(facial[min(output[0])]);
+      return facial[max(output[0])];
+    }
+    interpreter.close();
+  } on PlatformException {
+    print('Failed to get platform version.');
+  } catch (e) {
+    print(e);
   }
+  return "錯誤";
 }
 
 class Box extends StatelessWidget {
-  double right;
-  double top;
-  double width;
-  double height;
   Box(
       {@required this.right,
       @required this.top,
       @required this.width,
-      @required this.height});
+      @required this.height,
+      this.ratio = 1.0}); // screen width : photo width
 
-  Box.square({
-    @required this.right,
-    @required this.top,
-    @required side,
-  }) {
-    width = side;
-    height = side;
-  }
+  Box.square(
+      {@required this.right,
+      @required this.top,
+      @required double side,
+      this.ratio = 1.0})
+      : width = side,
+        height = side;
+
+  final double right;
+  final double top;
+  final double width;
+  final double height;
+  final double ratio;
 
   Widget build(BuildContext context) {
     return Positioned(
-        right: right,
-        top: top,
-        width: width,
-        height: height,
+        right: right * ratio,
+        top: top * ratio,
+        width: width * ratio,
+        height: height * ratio,
         child: Container(
             decoration: BoxDecoration(
           border:

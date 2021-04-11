@@ -1,5 +1,4 @@
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
-
 // reference: https://github.com/am15h/tflite_flutter_helper/blob/master/example/image_classification/lib/classifier.dart
 
 class Classifier {
@@ -17,9 +16,9 @@ class Classifier {
       _inputShape = _interpreter.getInputTensor(0).shape;
       _outputShape = _interpreter.getOutputTensor(0).shape;
       var _outputType = _interpreter.getOutputTensor(0).type;
-      print("inputshape $_inputShape");
-      print("outputshape $_outputShape");
-      print("outputtype $_outputType");
+      print("Classifier.loadModel() input shape: $_inputShape");
+      print("Classifier.loadModel() output shape: $_outputShape");
+      print("Classifier.loadModel() output type: $_outputType");
       return _interpreter;
     } catch (e) {
       print('Unable to create interpreter, Caught Exception: $e');
@@ -33,19 +32,5 @@ class Classifier {
   dynamic run(input, output) {
     _interpreter.run(input, output);
     return output;
-  }
-
-  Map<String, dynamic> decide(List list1D) {
-    if (list1D == null) return null;
-    if (list1D.length == 0) return null;
-    var maxIndex = 0;
-    var sum = 0.0;
-    for (int i = 0; i < list1D.length; i++) {
-      sum += list1D[i];
-      if (list1D[i] > list1D[maxIndex]) {
-        maxIndex = i;
-      }
-    }
-    return {"sum": sum, "label": maxIndex, "val": list1D[maxIndex]};
   }
 }
