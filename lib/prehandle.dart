@@ -7,8 +7,7 @@ class ImagePrehandle {
   img.Image image;
   var height, width;
 
-  ImagePrehandle(byteData) {
-    image = img.JpegDecoder().decodeImage(byteData);
+  ImagePrehandle(this.image) {
     list = image.data; //Uint32List
     height = image.height;
     width = image.width;
@@ -43,7 +42,7 @@ class ImagePrehandle {
   }
    */
 
-  List<List<List<double>>> uint32ListToRGB3D(img.Image src) {
+  /*List<List<List<double>>> uint32ListToRGB3D(img.Image src) {
     List<List<List<double>>> rgb =
         List.filled(src.width, List.filled(src.height, [0, 0, 0]));
 
@@ -61,6 +60,26 @@ class ImagePrehandle {
       }
     }
     print(rgb);
+    return rgb;
+  }*/
+
+  List<List<List<double>>> uint32ListToRGB3D(img.Image src) {
+    int k = 0;
+    int e;
+    List<List<List<double>>> rgb = [];
+    for (int i = 0; i < src.width; i++) {
+      List<List<double>> row = [];
+      for (int j = 0; j < src.height; j++) {
+        // e is ##AABBGGRR
+        e = src.data[k++];
+        row.add([
+          (e & 255) / 255.0,
+          ((e >> 8) & 255) / 255.0,
+          ((e >> 16) & 255) / 255.0
+        ]);
+      }
+      rgb.add(row);
+    }
     return rgb;
   }
 
