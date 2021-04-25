@@ -8,9 +8,11 @@ class Classifier {
 
   dynamic get inputShape => _inputShape;
   dynamic get outputShape => _outputShape;
+  dynamic get interpreter => _interpreter;
 
   Future<tfl.Interpreter> loadModel(path) async {
     try {
+      if (_interpreter != null) return _interpreter;
       _interpreter = await tfl.Interpreter.fromAsset(path);
       print('interpreter Created Succesfully');
       _inputShape = _interpreter.getInputTensor(0).shape;

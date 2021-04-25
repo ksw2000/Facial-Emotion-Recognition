@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "720908822533",
+    "project_id": "face-detection-8bfbc",
+    "storage_bucket": "face-detection-8bfbc.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:720908822533:android:a5e018075def4a246d546c",
+        "android_client_info": {
+          "package_name": "com.example.facial_emotion_recognition"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "720908822533-77nb10vqe5midbnbo18cp88a6knrhefs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQlQN6Zt0zlGSho63GqUpG-cjsVtSsEoY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "720908822533-77nb10vqe5midbnbo18cp88a6knrhefs.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
