@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -92,6 +91,7 @@ class TakePictureScreen extends StatefulWidget {
 class TakePictureScreenState extends State<TakePictureScreen> {
   String text = "";
   Widget preview, faceRange;
+  List<Widget> oriWidgetList, widgetList;
   FlutterSoundRecorder myRecorder;
   FaceDetector faceDetector;
   double ratio = 1;
@@ -112,60 +112,44 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   @override
   Widget build(BuildContext context) {
     ratio = MediaQuery.of(context).size.width / cameraWidth;
-    double top = (cameraHeight - shotSize) / 2;
-    double right = (cameraWidth - shotSize) / 2;
 
-    return Center(
-        child: Stack(
-      children: [
-        CameraPreview(cameraCtrl),
-        faceRange ?? Container(),
-        /*
-                Box.square(
-                    top: top,
-                    right: right,
-                    side: shotSize.toDouble(),
-                    ratio: ratio,
-                    child: Positioned(
-                        top: -35,
-                        left: 0,
-                        child: Text(text ?? "",
-                            style: TextStyle(
-                                fontSize: 20, backgroundColor: Colors.blue)))),
-                 */
-        (preview != null)
-            ? Align(alignment: Alignment.topRight, child: preview)
-            : Container(),
-        Positioned(
-            bottom: 10,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Container(
-                  padding: EdgeInsets.all(15),
-                  decoration:
-                      BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
-                  child: InkWell(
-                    child: Icon(Icons.camera_alt, size: 30),
-                    onTap: () {
-                      shotWithFaceDetect(top, right);
-                      //shot(top, right);
-                    },
-                  ),
+    oriWidgetList = [
+      CameraPreview(cameraCtrl),
+      /*
+      (preview != null)
+          ? Align(alignment: Alignment.topRight, child: preview)
+          : Container(),
+
+       */
+      Positioned(
+          bottom: 10,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Container(
+                padding: EdgeInsets.all(15),
+                decoration:
+                    BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
+                child: InkWell(
+                  child: Icon(Icons.camera_alt, size: 30),
+                  onTap: () {
+                    shotWithFaceDetect();
+                  },
                 ),
-                Container(
-                  padding: EdgeInsets.all(15),
-                  decoration:
-                      BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
-                  child: InkWell(
-                    child: Icon(Icons.face, size: 30),
-                    onTap: () async {
-                      shotWithFaceDetectStream(top, right);
-                    },
-                  ),
+              ),
+              Container(
+                padding: EdgeInsets.all(15),
+                decoration:
+                    BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
+                child: InkWell(
+                  child: Icon(Icons.stream, size: 30),
+                  onTap: () async {
+                    shotWithFaceDetectStream();
+                  },
                 ),
-                /***********************************************
+              ),
+              /***********************************************
                          * REAL - TIME MODE
                          *
                          * Container(
@@ -192,162 +176,64 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                             ),
 
                          ************************************************/
-                // Container(
-                //   padding: EdgeInsets.all(15),
-                //   decoration: BoxDecoration(
-                //       shape: BoxShape.circle, color: Colors.blue),
-                //   child: InkWell(
-                //     child: Icon(Icons.circle, size: 30),
-                //     onTap: () {
-                //       myRecorder.openAudioSession().then((_) {
-                //         myRecorder.startRecorder();
-                //         //myRecorder.closeAudioSession();
-                //       });
-                //     },
-                //   ),
-                // ),
-                // Container(
-                //   padding: EdgeInsets.all(15),
-                //   decoration: BoxDecoration(
-                //       shape: BoxShape.circle, color: Colors.blue),
-                //   child: InkWell(
-                //     child: Icon(Icons.stop, size: 30),
-                //     onTap: () {
-                //       myRecorder.stopRecorder();
-                //       myRecorder.closeAudioSession();
-                //     },
-                //   ),
-                // ),
-                Container(
-                  padding: EdgeInsets.all(15),
-                  decoration:
-                      BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
-                  child: InkWell(
-                    child: Icon(Icons.stop, size: 30),
-                    onTap: () async {
-                      await cameraCtrl.stopImageStream();
-                    },
-                  ),
+              // Container(
+              //   padding: EdgeInsets.all(15),
+              //   decoration: BoxDecoration(
+              //       shape: BoxShape.circle, color: Colors.blue),
+              //   child: InkWell(
+              //     child: Icon(Icons.circle, size: 30),
+              //     onTap: () {
+              //       myRecorder.openAudioSession().then((_) {
+              //         myRecorder.startRecorder();
+              //         //myRecorder.closeAudioSession();
+              //       });
+              //     },
+              //   ),
+              // ),
+              // Container(
+              //   padding: EdgeInsets.all(15),
+              //   decoration: BoxDecoration(
+              //       shape: BoxShape.circle, color: Colors.blue),
+              //   child: InkWell(
+              //     child: Icon(Icons.stop, size: 30),
+              //     onTap: () {
+              //       myRecorder.stopRecorder();
+              //       myRecorder.closeAudioSession();
+              //     },
+              //   ),
+              // ),
+              Container(
+                padding: EdgeInsets.all(15),
+                decoration:
+                    BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
+                child: InkWell(
+                  child: Icon(Icons.stop, size: 30),
+                  onTap: () async {
+                    await cameraCtrl.stopImageStream();
+                  },
                 ),
+              ),
+            ],
+          ))
+    ];
 
-                /***************************************************
-                         * VIDEO-MODE
-                        Container(
-                          padding: EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                              shape: BoxShape.circle, color: Colors.blue),
-                          child: InkWell(
-                            child: Icon(Icons.play_arrow, size: 30),
-                            onTap: () async {
-                              try {
-                                // Ensure that the camera is initialized.
-                                await _initializeControllerFuture;
-
-                                // Attempt to take a picture and log where it's been saved.
-                                await _cameraCtrl.startVideoRecording();
-                                print("錄影開始");
-                              } catch (e) {
-                                print(e);
-                              }
-                            },
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                              shape: BoxShape.circle, color: Colors.blue),
-                          child: InkWell(
-                            child: Icon(Icons.stop, size: 30),
-                            onTap: () async {
-                              try {
-                                // Ensure that the camera is initialized.
-                                await _initializeControllerFuture;
-
-                                // Attempt to take a picture and log where it's been saved.
-                                XFile f =
-                                    await _cameraCtrl.stopVideoRecording();
-                                print(f.path);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) {
-                                    return PreviewVideo(File(f.path));
-                                  }),
-                                );
-                              } catch (e) {
-                                print(e);
-                              }
-                            },
-                          ),
-                        )
-                         ****************************************************/
-              ],
-            ))
-      ],
-    ));
-  }
-
-  img.Image convertYUV420(CameraImage image) {
-    var ret = img.Image(image.width, image.height); // Create Image buffer
-
-    Plane plane = image.planes[0];
-    const int shift = (0xFF << 24);
-
-    // Fill image buffer with plane[0] from YUV420_888
-    for (int x = 0; x < image.width; x++) {
-      for (int planeOffset = 0;
-          planeOffset < image.height * image.width;
-          planeOffset += image.width) {
-        final pixelColor = plane.bytes[planeOffset + x];
-        // color: 0x FF  FF  FF  FF
-        //           A   B   G   R
-        // Calculate pixel color
-        var newVal =
-            shift | (pixelColor << 16) | (pixelColor << 8) | pixelColor;
-
-        ret.data[planeOffset + x] = newVal;
-      }
-    }
-
-    return ret;
+    return Center(child: Stack(children: widgetList));
   }
 
   Future shotStream(double top, double right) async {
     try {
       // Ensure that the camera is initialized.
       await cameraCtrl.startImageStream((CameraImage cameraImage) {
-        if (mounted) {
-          runModel(
-              // reference: transfer cameraImage to img.Image
-              //https://gist.github.com/Alby-o/fe87e35bc21d534c8220aed7df028e03
-              image: convertYUV420(cameraImage),
-
-              // img.Image.fromBytes(
-              //   cameraImage.width,
-              //   cameraImage.height,
-              //   cameraImage.planes[0].bytes,
-              //   format: img.Format.bgra,
-              // ),
-              top: top,
-              right: right,
-              callback: (img.Image i) {
-                setState(() {
-                  preview = Image.memory(img.JpegEncoder().encodeImage(i));
-                });
-              }).then((res) {
-            setState(() {
-              print(res);
-              text = res;
-            });
-          });
-        }
+        ImagePrehandle.convertYUV420(cameraImage);
       });
     } catch (e) {
       print(e);
     }
   }
 
-  Future shotWithFaceDetect(double top, double right) async {
+  Future shotWithFaceDetect() async {
     print("shotWithFaceDetect()");
+    widgetList = oriWidgetList;
     try {
       // Attempt to take a picture and log where it's been saved.
       await cameraCtrl.setFlashMode(FlashMode.off);
@@ -358,46 +244,92 @@ class TakePictureScreenState extends State<TakePictureScreen> {
       final List<Face> faces = await faceDetector.processImage(visionImage);
       for (Face face in faces) {
         final Rect boundingBox = face.boundingBox;
-        print("boundingBox: $boundingBox");
-        print("top: ${boundingBox.top}");
-        print("bottom: ${boundingBox.bottom}");
-        print("right: ${boundingBox.right}");
-        print("left: ${boundingBox.left}");
-        setState(() {
-          faceRange = Box(
-            right: cameraWidth - boundingBox.right,
-            top: boundingBox.top,
-            height: boundingBox.bottom - boundingBox.top,
-            width: boundingBox.right - boundingBox.left,
-            ratio: ratio,
-          );
-        });
-        var size = max([
-          boundingBox.bottom - boundingBox.top,
-          boundingBox.right - boundingBox.left
-        ]);
-        ImagePrehandle preHandle = ImagePrehandle(
-            img.JpegDecoder().decodeImage(await savedImage.readAsBytes()));
-        preHandle.image = preHandle.crop(preHandle.image,
+
+        print("""
+        Face range-
+        top: ${boundingBox.top}
+        bottom: ${boundingBox.bottom}
+        right: ${boundingBox.right}
+        left: ${boundingBox.left}
+        """);
+
+        double faceRangeSize = boundingBox.bottom - boundingBox.top;
+        // boundingBox.right - boundingBox.left ==
+        // boundingBox.bottom - boundingBox.top
+        img.Image inputImg =
+            img.JpegDecoder().decodeImage(await savedImage.readAsBytes());
+        inputImg = ImagePrehandle.crop(inputImg,
             y: cameraWidth - boundingBox.right.toInt(),
             x: boundingBox.top.toInt(),
-            w: size,
-            h: size);
-        preHandle.image = preHandle.resize(preHandle.image,
+            w: faceRangeSize.toInt(),
+            h: faceRangeSize.toInt());
+        inputImg = ImagePrehandle.resize(inputImg,
             w: cls.inputShape[1], h: cls.inputShape[2]);
-        setState(() {
-          preview =
-              Image.memory(img.JpegEncoder().encodeImage(preHandle.image));
-        });
+
+        // setState(() {
+        //   preview = Image.memory(img.JpegEncoder().encodeImage(inputImg));
+        // });
+
+        // run model
+        if (cls.interpreter != null) {
+          int outputSize = 1;
+          cls.outputShape.forEach((e) {
+            outputSize *= e;
+          });
+          var input = ImagePrehandle.uint32ListToRGB3D(inputImg);
+          var output = List.filled(outputSize, 0).reshape(cls.outputShape);
+          cls.run([input], output);
+          print(facial[max(output[0])]);
+          setState(() {
+            widgetList.add(Box(
+                right: cameraWidth - boundingBox.right,
+                top: boundingBox.top,
+                height: boundingBox.bottom - boundingBox.top,
+                width: boundingBox.right - boundingBox.left,
+                ratio: ratio,
+                child: Positioned(
+                    top: -35,
+                    left: 0,
+                    child: Text("${facial[max(output[0])]}",
+                        style: TextStyle(
+                            fontSize: 20, backgroundColor: Colors.blue)))));
+          });
+          /*
+          setState(() {
+            faceRange = Box(
+                right: cameraWidth - boundingBox.right,
+                top: boundingBox.top,
+                height: boundingBox.bottom - boundingBox.top,
+                width: boundingBox.right - boundingBox.left,
+                ratio: ratio,
+                child: Positioned(
+                    top: -35,
+                    left: 0,
+                    child: Text("${facial[max(output[0])]}",
+                        style: TextStyle(
+                            fontSize: 20, backgroundColor: Colors.blue))));
+          });
+           */
+        }
       } // screen width : photo width
 
       faceDetector.close();
     } catch (e) {
-      print("line384 $e");
+      print("line299 $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            "$e",
+          ),
+          action: SnackBarAction(
+            label: 'close',
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          )));
     }
   }
 
-  Future shotWithFaceDetectStream(double top, double right) async {
+  Future shotWithFaceDetectStream() async {
     print("shotWithFaceDetect()");
     try {
       // Attempt to take a picture and log where it's been saved.
@@ -422,8 +354,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
           final List<Face> faces = await faceDetector.processImage(visionImage);
           for (Face face in faces) {
             final Rect boundingBox = face.boundingBox;
-            print("line366");
-            print(boundingBox);
             // final double rotY = face
             //     .headEulerAngleY; // Head is rotated to the right rotY degrees
             // final double rotZ =
@@ -450,70 +380,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
     } catch (e) {
       print(e);
     }
-  }
-
-  Future shot(double top, double right) async {
-    try {
-      // Attempt to take a picture and log where it's been saved.
-      await cameraCtrl.takePicture().then((XFile file) async {
-        if (mounted) {
-          runModel(
-              image: img.JpegDecoder().decodeImage(await file.readAsBytes()),
-              top: top,
-              right: right,
-              callback: (img.Image i) {
-                setState(() {
-                  preview = Image.memory(img.JpegEncoder().encodeImage(i));
-                });
-              }).then((res) {
-            setState(() {
-              print(res);
-              text = res;
-            });
-          });
-        }
-      });
-    } catch (e) {
-      print(e);
-    }
-  }
-
-  Future<String> runModel(
-      {img.Image image,
-      double right: 0,
-      double top: 0,
-      Function callback}) async {
-    try {
-      /// Pixels are encoded into 4-byte Uint32 integers in #AABBGGRR channel order.
-      ImagePrehandle preHandle = ImagePrehandle(image);
-      // 3D list
-      // crop's direction vertical top x = 0, horizontal right: y = 0
-      preHandle.image = preHandle.crop(preHandle.image,
-          y: right.toInt(), x: top.toInt(), w: shotSize, h: shotSize);
-      preHandle.image = preHandle.resize(preHandle.image,
-          w: cls.inputShape[1], h: cls.inputShape[2]);
-
-      // check the photo after cropped and resized
-      if (callback != null) {
-        callback(preHandle.image);
-      }
-
-      if (cls.interpreter != null) {
-        int outputSize = 1;
-        cls.outputShape.forEach((e) {
-          outputSize *= e;
-        });
-        var input = preHandle.uint32ListToRGB3D(preHandle.image);
-        var output = List.filled(outputSize, 0).reshape(cls.outputShape);
-        cls.run([input], output);
-        return facial[max(output[0])];
-      }
-    } on PlatformException {
-      print('Failed to get platform version.');
-    } catch (e) {
-      print(e);
-    }
-    return "錯誤";
   }
 }
 
