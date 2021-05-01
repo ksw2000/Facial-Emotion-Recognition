@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:video_player/video_player.dart';
@@ -10,24 +9,13 @@ import 'package:firebase_ml_vision/firebase_ml_vision.dart';
 import 'package:image/image.dart' as img;
 import './classifier.dart';
 import './prehandle.dart';
+import './imageConvert.dart';
 
-const int shotSize = 500;
-const int cameraWidth = 720;
-const int cameraHeight = 1280;
+const String facialModel = 'fe90.tflite';
+
 var cls = Classifier();
 
-const facial = ['驚訝', '怕爆', '噁心', '開勳', '桑心', '森77', '無'];
-
-int max(List<num> list) {
-  if (list == null || list?.length == 0) return null;
-  int index = 0;
-  for (int i = 0; i < list.length; i++) {
-    if (list[i] > list[index]) {
-      index = i;
-    }
-  }
-  return index;
-}
+const facial = ['驚訝', '怕爆', '覺得噁心', '開心', '傷心', '生氣', '無'];
 
 Future<void> main() async {
   // Ensure that plugin services are initialized so that `availableCameras()`
@@ -48,16 +36,34 @@ class Main extends StatefulWidget {
   _MainState createState() => _MainState();
 }
 
-class _MainState extends State<Main> {
+class _MainState extends State<Main> with WidgetsBindingObserver {
   CameraController cameraCtrl;
 
   Future _initialize() async {
-    await cls.loadModel('fe90.tflite');
+    await cls.loadModel(facialModel);
     cameraCtrl =
         CameraController(widget.camera, ResolutionPreset.high, // 1280x720
             enableAudio: true);
     //imageFormatGroup: ImageFormatGroup.yuv420);
     return cameraCtrl.initialize();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // App state changed before we got the chance to initialize.
+    if (cameraCtrl == null || !cameraCtrl.value.isInitialized) {
+      return;
+    }
+    if (state == AppLifecycleState.inactive) {
+      cameraCtrl?.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      print("------------------------resumed------------------------");
+      if (cameraCtrl != null) {
+        cameraCtrl =
+            CameraController(widget.camera, ResolutionPreset.high, // 1280x720
+                enableAudio: true);
+      }
+    }
   }
 
   Widget build(BuildContext context) {
@@ -90,17 +96,19 @@ class TakePictureScreen extends StatefulWidget {
 
 class TakePictureScreenState extends State<TakePictureScreen> {
   String text = "";
-  Widget preview, faceRange;
+  //Widget preview, faceRange;
   List<Widget> oriWidgetList, widgetList;
   FlutterSoundRecorder myRecorder;
   FaceDetector faceDetector;
   double ratio = 1;
   var cameraCtrl;
+  bool isNowStream = false;
 
   @override
   void initState() {
     super.initState();
     cameraCtrl = widget.cameraCtrl;
+    print("width: ${cameraCtrl.value.previewSize.height}");
     myRecorder = FlutterSoundRecorder();
   }
 
@@ -111,7 +119,8 @@ class TakePictureScreenState extends State<TakePictureScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ratio = MediaQuery.of(context).size.width / cameraWidth;
+    ratio =
+        MediaQuery.of(context).size.width / cameraCtrl.value.previewSize.height;
 
     oriWidgetList = [
       CameraPreview(cameraCtrl),
@@ -119,7 +128,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
       (preview != null)
           ? Align(alignment: Alignment.topRight, child: preview)
           : Container(),
-
        */
       Positioned(
           bottom: 10,
@@ -143,9 +151,17 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                 decoration:
                     BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
                 child: InkWell(
-                  child: Icon(Icons.stream, size: 30),
+                  child:
+                      Icon(isNowStream ? Icons.stop : Icons.stream, size: 30),
                   onTap: () async {
-                    shotWithFaceDetectStream();
+                    if (isNowStream) {
+                      await cameraCtrl.stopImageStream();
+                    } else {
+                      await shotWithFaceDetectStream();
+                    }
+                    setState(() {
+                      isNowStream = !isNowStream;
+                    });
                   },
                 ),
               ),
@@ -202,33 +218,11 @@ class TakePictureScreenState extends State<TakePictureScreen> {
               //     },
               //   ),
               // ),
-              Container(
-                padding: EdgeInsets.all(15),
-                decoration:
-                    BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
-                child: InkWell(
-                  child: Icon(Icons.stop, size: 30),
-                  onTap: () async {
-                    await cameraCtrl.stopImageStream();
-                  },
-                ),
-              ),
             ],
           ))
     ];
 
-    return Center(child: Stack(children: widgetList));
-  }
-
-  Future shotStream(double top, double right) async {
-    try {
-      // Ensure that the camera is initialized.
-      await cameraCtrl.startImageStream((CameraImage cameraImage) {
-        ImagePrehandle.convertYUV420(cameraImage);
-      });
-    } catch (e) {
-      print(e);
-    }
+    return Stack(children: widgetList ?? oriWidgetList);
   }
 
   Future shotWithFaceDetect() async {
@@ -259,7 +253,8 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         img.Image inputImg =
             img.JpegDecoder().decodeImage(await savedImage.readAsBytes());
         inputImg = ImagePrehandle.crop(inputImg,
-            y: cameraWidth - boundingBox.right.toInt(),
+            y: cameraCtrl.value.previewSize.height.toInt() -
+                boundingBox.right.toInt(),
             x: boundingBox.top.toInt(),
             w: faceRangeSize.toInt(),
             h: faceRangeSize.toInt());
@@ -272,17 +267,12 @@ class TakePictureScreenState extends State<TakePictureScreen> {
 
         // run model
         if (cls.interpreter != null) {
-          int outputSize = 1;
-          cls.outputShape.forEach((e) {
-            outputSize *= e;
-          });
           var input = ImagePrehandle.uint32ListToRGB3D(inputImg);
-          var output = List.filled(outputSize, 0).reshape(cls.outputShape);
-          cls.run([input], output);
-          print(facial[max(output[0])]);
+          var output = cls.run([input]);
+          print(facial[output]);
           setState(() {
             widgetList.add(Box(
-                right: cameraWidth - boundingBox.right,
+                right: cameraCtrl.value.previewSize.height - boundingBox.right,
                 top: boundingBox.top,
                 height: boundingBox.bottom - boundingBox.top,
                 width: boundingBox.right - boundingBox.left,
@@ -290,14 +280,14 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                 child: Positioned(
                     top: -35,
                     left: 0,
-                    child: Text("${facial[max(output[0])]}",
+                    child: Text("${facial[output]}",
                         style: TextStyle(
                             fontSize: 20, backgroundColor: Colors.blue)))));
           });
           /*
           setState(() {
             faceRange = Box(
-                right: cameraWidth - boundingBox.right,
+                right: cameraCtrl.value.previewSize.height - boundingBox.right,
                 top: boundingBox.top,
                 height: boundingBox.bottom - boundingBox.top,
                 width: boundingBox.right - boundingBox.left,
@@ -315,7 +305,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
 
       faceDetector.close();
     } catch (e) {
-      print("line299 $e");
+      print("line303 $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             "$e",
@@ -330,11 +320,15 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   }
 
   Future shotWithFaceDetectStream() async {
-    print("shotWithFaceDetect()");
+    print("shotWithFaceDetectStream()");
+    var lock = false;
+
     try {
       // Attempt to take a picture and log where it's been saved.
       await cameraCtrl.startImageStream((CameraImage cameraImage) async {
-        if (mounted) {
+        widgetList = oriWidgetList;
+        if (!lock) {
+          lock = true;
           final FirebaseVisionImageMetadata metadata =
               FirebaseVisionImageMetadata(
                   rawFormat: cameraImage.format.raw,
@@ -354,31 +348,58 @@ class TakePictureScreenState extends State<TakePictureScreen> {
           final List<Face> faces = await faceDetector.processImage(visionImage);
           for (Face face in faces) {
             final Rect boundingBox = face.boundingBox;
-            // final double rotY = face
-            //     .headEulerAngleY; // Head is rotated to the right rotY degrees
-            // final double rotZ =
-            //     face.headEulerAngleZ; // Head is tilted sideways rotZ degrees
-            // // If landmark detection was enabled with FaceDetectorOptions (mouth, ears,
-            // // eyes, cheeks, and nose available):
-            // final FaceLandmark leftEar =
-            //     face.getLandmark(FaceLandmarkType.leftEar);
-            // if (leftEar != null) {
-            //   final Offset leftEarPos = leftEar.position;
-            // }
-            // // If classification was enabled with FaceDetectorOptions:
-            // if (face.smilingProbability != null) {
-            //   final double smileProb = face.smilingProbability;
-            // }
-            // // If face tracking was enabled with FaceDetectorOptions:
-            // if (face.trackingId != null) {
-            //   final int id = face.trackingId;
-            // }
+            print(boundingBox);
+
+            double faceRangeSize = boundingBox.bottom - boundingBox.top;
+            // boundingBox.right - boundingBox.left ==
+            // boundingBox.bottom - boundingBox.top
+            img.Image inputImg = ImageUtils.convertCameraImage(cameraImage);
+            inputImg = ImagePrehandle.crop(inputImg,
+                y: cameraCtrl.value.previewSize.height -
+                    boundingBox.right.toInt(),
+                x: boundingBox.top.toInt(),
+                w: faceRangeSize.toInt(),
+                h: faceRangeSize.toInt());
+            inputImg = ImagePrehandle.resize(inputImg,
+                w: cls.inputShape[1], h: cls.inputShape[2]);
+
+            if (cls.interpreter != null) {
+              var input = ImagePrehandle.uint32ListToRGB3D(inputImg);
+              var output = cls.run([input]);
+              print(facial[output]);
+              setState(() {
+                widgetList.add(Box(
+                    right:
+                        cameraCtrl.value.previewSize.height - boundingBox.right,
+                    top: boundingBox.top,
+                    height: boundingBox.bottom - boundingBox.top,
+                    width: boundingBox.right - boundingBox.left,
+                    ratio: ratio,
+                    child: Positioned(
+                        top: -35,
+                        left: 0,
+                        child: Text("${facial[output]}",
+                            style: TextStyle(
+                                fontSize: 20, backgroundColor: Colors.blue)))));
+              });
+            }
           }
           faceDetector.close();
+          lock = false;
         }
       });
     } catch (e) {
-      print(e);
+      print("line348 $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            "$e",
+          ),
+          action: SnackBarAction(
+            label: 'close',
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          )));
     }
   }
 }

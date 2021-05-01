@@ -5,22 +5,25 @@ class Classifier {
   var _inputShape;
   var _outputShape;
   var _interpreter;
+  var _outputSize;
 
   dynamic get inputShape => _inputShape;
   dynamic get outputShape => _outputShape;
   dynamic get interpreter => _interpreter;
+  dynamic get outputSize => _outputSize;
 
   Future<tfl.Interpreter> loadModel(path) async {
     try {
       if (_interpreter != null) return _interpreter;
       _interpreter = await tfl.Interpreter.fromAsset(path);
-      print('interpreter Created Succesfully');
       _inputShape = _interpreter.getInputTensor(0).shape;
       _outputShape = _interpreter.getOutputTensor(0).shape;
-      var _outputType = _interpreter.getOutputTensor(0).type;
-      print("Classifier.loadModel() input shape: $_inputShape");
-      print("Classifier.loadModel() output shape: $_outputShape");
-      print("Classifier.loadModel() output type: $_outputType");
+
+      _outputSize = 1;
+      outputShape.forEach((e) {
+        _outputSize *= e;
+      });
+
       return _interpreter;
     } catch (e) {
       print('Unable to create interpreter, Caught Exception: $e');
@@ -31,8 +34,20 @@ class Classifier {
     * */
   }
 
-  dynamic run(input, output) {
+  int run(input) {
+    var output = List.filled(_outputSize, 0).reshape(_outputShape);
     _interpreter.run(input, output);
-    return output;
+    return _max(output[0]);
+  }
+
+  int _max(List<num> list) {
+    if (list == null || list?.length == 0) return null;
+    int index = 0;
+    for (int i = 0; i < list.length; i++) {
+      if (list[i] > list[index]) {
+        index = i;
+      }
+    }
+    return index;
   }
 }
