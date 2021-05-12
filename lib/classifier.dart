@@ -1,26 +1,25 @@
-import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
+import 'package:tflite_flutter/tflite_flutter.dart';
 // reference: https://github.com/am15h/tflite_flutter_helper/blob/master/example/image_classification/lib/classifier.dart
 
 class Classifier {
   var _inputShape;
   var _outputShape;
   var _interpreter;
-  var _outputSize;
+  var _outputSize = 1;
 
   dynamic get inputShape => _inputShape;
   dynamic get outputShape => _outputShape;
   dynamic get interpreter => _interpreter;
   dynamic get outputSize => _outputSize;
 
-  Future<tfl.Interpreter> loadModel(path) async {
+  Future<Interpreter> loadModel(String path) async {
     try {
       if (_interpreter != null) return _interpreter;
-      _interpreter = await tfl.Interpreter.fromAsset(path);
+      _interpreter = await Interpreter.fromAsset(path);
       _inputShape = _interpreter.getInputTensor(0).shape;
       _outputShape = _interpreter.getOutputTensor(0).shape;
 
-      _outputSize = 1;
-      outputShape.forEach((e) {
+      _outputShape.forEach((e) {
         _outputSize *= e;
       });
 

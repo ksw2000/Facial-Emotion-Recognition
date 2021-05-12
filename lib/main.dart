@@ -4,7 +4,6 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:video_player/video_player.dart';
 import 'package:firebase_ml_vision/firebase_ml_vision.dart';
 import 'package:image/image.dart' as img;
 import './classifier.dart';
@@ -12,8 +11,10 @@ import './prehandle.dart';
 import './imageConvert.dart';
 
 const String facialModel = 'fe90.tflite';
+const String facialModel2 = 'fe80.tflite';
 
 var cls = Classifier();
+var cls2 = Classifier();
 
 const facial = ['驚訝', '怕爆', '覺得噁心', '開心', '傷心', '生氣', '無'];
 
@@ -41,6 +42,8 @@ class _MainState extends State<Main> with WidgetsBindingObserver {
 
   Future _initialize() async {
     await cls.loadModel(facialModel);
+    await cls2.loadModel(facialModel2);
+
     cameraCtrl =
         CameraController(widget.camera, ResolutionPreset.high, // 1280x720
             enableAudio: true);
@@ -124,11 +127,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
 
     oriWidgetList = [
       CameraPreview(cameraCtrl),
-      /*
-      (preview != null)
-          ? Align(alignment: Alignment.topRight, child: preview)
-          : Container(),
-       */
       Positioned(
           bottom: 10,
           child: Row(
@@ -165,59 +163,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                   },
                 ),
               ),
-              /***********************************************
-                         * REAL - TIME MODE
-                         *
-                         * Container(
-                            padding: EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                            shape: BoxShape.circle, color: Colors.blue),
-                            child: InkWell(
-                            child: Icon(Icons.stream, size: 30),
-                            onTap: () {
-                            shotStream(top, right);
-                            },
-                            ),
-                            ),
-                            Container(
-                            padding: EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                            shape: BoxShape.circle, color: Colors.blue),
-                            child: InkWell(
-                            child: Icon(Icons.stop, size: 30),
-                            onTap: () {
-                            stopStream();
-                            },
-                            ),
-                            ),
-
-                         ************************************************/
-              // Container(
-              //   padding: EdgeInsets.all(15),
-              //   decoration: BoxDecoration(
-              //       shape: BoxShape.circle, color: Colors.blue),
-              //   child: InkWell(
-              //     child: Icon(Icons.circle, size: 30),
-              //     onTap: () {
-              //       myRecorder.openAudioSession().then((_) {
-              //         myRecorder.startRecorder();
-              //         //myRecorder.closeAudioSession();
-              //       });
-              //     },
-              //   ),
-              // ),
-              // Container(
-              //   padding: EdgeInsets.all(15),
-              //   decoration: BoxDecoration(
-              //       shape: BoxShape.circle, color: Colors.blue),
-              //   child: InkWell(
-              //     child: Icon(Icons.stop, size: 30),
-              //     onTap: () {
-              //       myRecorder.stopRecorder();
-              //       myRecorder.closeAudioSession();
-              //     },
-              //   ),
-              // ),
             ],
           ))
     ];
@@ -250,26 +195,22 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         double faceRangeSize = boundingBox.bottom - boundingBox.top;
         // boundingBox.right - boundingBox.left ==
         // boundingBox.bottom - boundingBox.top
-        img.Image inputImg =
-            img.JpegDecoder().decodeImage(await savedImage.readAsBytes());
-        inputImg = ImagePrehandle.crop(inputImg,
+        img.Image inputImg = ImagePrehandle.crop(
+            img.JpegDecoder().decodeImage(await savedImage.readAsBytes()),
             y: cameraCtrl.value.previewSize.height.toInt() -
                 boundingBox.right.toInt(),
             x: boundingBox.top.toInt(),
             w: faceRangeSize.toInt(),
             h: faceRangeSize.toInt());
-        inputImg = ImagePrehandle.resize(inputImg,
-            w: cls.inputShape[1], h: cls.inputShape[2]);
 
-        // setState(() {
-        //   preview = Image.memory(img.JpegEncoder().encodeImage(inputImg));
-        // });
-
-        // run model
+        // run model1
         if (cls.interpreter != null) {
-          var input = ImagePrehandle.uint32ListToRGB3D(inputImg);
-          var output = cls.run([input]);
-          print(facial[output]);
+          var input1 = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
+              inputImg,
+              w: cls.inputShape[1],
+              h: cls.inputShape[2]));
+          var output1 = cls.run([input1]);
+          print(facial[output1]);
           setState(() {
             widgetList.add(Box(
                 right: cameraCtrl.value.previewSize.height - boundingBox.right,
@@ -280,32 +221,40 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                 child: Positioned(
                     top: -35,
                     left: 0,
-                    child: Text("${facial[output]}",
+                    child: Text("${facial[output1]}",
                         style: TextStyle(
                             fontSize: 20, backgroundColor: Colors.blue)))));
           });
-          /*
+        }
+
+        // run mode2
+        if (cls2.interpreter != null) {
+          var input2 = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
+              inputImg,
+              w: cls2.inputShape[1],
+              h: cls2.inputShape[2]));
+          var output2 = cls2.run([input2]);
+          print(facial[output2]);
           setState(() {
-            faceRange = Box(
+            widgetList.add(Box(
                 right: cameraCtrl.value.previewSize.height - boundingBox.right,
                 top: boundingBox.top,
                 height: boundingBox.bottom - boundingBox.top,
                 width: boundingBox.right - boundingBox.left,
                 ratio: ratio,
                 child: Positioned(
-                    top: -35,
+                    top: -70,
                     left: 0,
-                    child: Text("${facial[max(output[0])]}",
+                    child: Text("${facial[output2]}",
                         style: TextStyle(
-                            fontSize: 20, backgroundColor: Colors.blue))));
+                            fontSize: 20, backgroundColor: Colors.blue)))));
           });
-           */
         }
       } // screen width : photo width
 
       faceDetector.close();
     } catch (e) {
-      print("line303 $e");
+      print("line317 $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             "$e",
@@ -353,19 +302,19 @@ class TakePictureScreenState extends State<TakePictureScreen> {
             double faceRangeSize = boundingBox.bottom - boundingBox.top;
             // boundingBox.right - boundingBox.left ==
             // boundingBox.bottom - boundingBox.top
-            img.Image inputImg = ImageUtils.convertCameraImage(cameraImage);
-            inputImg = ImagePrehandle.crop(inputImg,
+            img.Image inputImg = ImagePrehandle.crop(
+                ImageUtils.convertCameraImage(cameraImage),
                 y: cameraCtrl.value.previewSize.height -
                     boundingBox.right.toInt(),
                 x: boundingBox.top.toInt(),
                 w: faceRangeSize.toInt(),
                 h: faceRangeSize.toInt());
-            inputImg = ImagePrehandle.resize(inputImg,
-                w: cls.inputShape[1], h: cls.inputShape[2]);
 
-            if (cls.interpreter != null) {
+            if (cls2.interpreter != null) {
+              inputImg = ImagePrehandle.resize(inputImg,
+                  w: cls2.inputShape[1], h: cls2.inputShape[2]);
               var input = ImagePrehandle.uint32ListToRGB3D(inputImg);
-              var output = cls.run([input]);
+              var output = cls2.run([input]);
               print(facial[output]);
               setState(() {
                 widgetList.add(Box(
@@ -389,7 +338,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         }
       });
     } catch (e) {
-      print("line348 $e");
+      print("line341 $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             "$e",
@@ -404,16 +353,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   }
 }
 
-class FaceRange extends StatefulWidget {
-  _FaceRangeState createState() => _FaceRangeState();
-}
-
-class _FaceRangeState extends State<FaceRange> {
-  Widget build(BuildContext context) {
-    return Container();
-  }
-}
-
+/*
 class PreviewVideo extends StatefulWidget {
   PreviewVideo(this.file);
   final File file;
@@ -479,6 +419,7 @@ class _PreviewVideoState extends State<PreviewVideo> {
     );
   }
 }
+*/
 
 class Box extends StatelessWidget {
   Box(
