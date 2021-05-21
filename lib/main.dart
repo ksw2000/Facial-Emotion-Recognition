@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_sound/flutter_sound.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_ml_vision/firebase_ml_vision.dart';
+import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image/image.dart' as img;
 import './classifier.dart';
 import './prehandle.dart';
 import './imageConvert.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:video_player/video_player.dart';
 
 const String facialModel = 'fe93.tflite';
 const String facialModel2 = 'fe80.tflite';
@@ -21,9 +20,6 @@ Future<void> main() async {
   // Ensure that plugin services are initialized so that `availableCameras()`
   // can be called before `runApp()`
   WidgetsFlutterBinding.ensureInitialized();
-
-  // initialize firebase app
-  await Firebase.initializeApp();
 
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
@@ -99,6 +95,8 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   var cameraCtrl;
   bool isNowStream = false;
   bool isNowBusy = false;
+  FaceDetector faceDetector_acc;
+  FaceDetector faceDetector_fast;
 
   @override
   void initState() {
@@ -106,10 +104,17 @@ class TakePictureScreenState extends State<TakePictureScreen> {
     cameraCtrl = widget.cameraCtrl;
     myRecorder = FlutterSoundRecorder();
     myPlayer = FlutterSoundPlayer();
+    faceDetector_acc = GoogleMlKit.vision.faceDetector(FaceDetectorOptions(
+      mode: FaceDetectorMode.accurate,
+    ));
+
+    faceDetector_fast = GoogleMlKit.vision.faceDetector(FaceDetectorOptions());
   }
 
   @override
   void dispose() {
+    faceDetector_acc.close();
+    faceDetector_fast.close();
     super.dispose();
   }
 
@@ -203,11 +208,11 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                       // convert to mfcc
                       if (!myPlayer.isOpen()) {
                         await myPlayer.openAudioSession();
-                        await myPlayer.startPlayer(
-                          fromURI: _mPath,
-                          codec: Codec.pcm16,
-                        );
                       }
+                      await myPlayer.startPlayer(
+                        fromURI: _mPath,
+                        codec: Codec.pcm16,
+                      );
                     });
                   },
                 ),
@@ -246,12 +251,8 @@ class TakePictureScreenState extends State<TakePictureScreen> {
           img.JpegDecoder().decodeImage(await savedImg.readAsBytes());
 
       // STEP1: Initialize Firebase faceDetector
-      final FirebaseVisionImage visionImage =
-          FirebaseVisionImage.fromFile(File(savedImg.path));
-      FaceDetector faceDetector = FirebaseVision.instance
-          .faceDetector(FaceDetectorOptions(mode: FaceDetectorMode.accurate));
-      final List<Face> faces = await faceDetector.processImage(visionImage);
-      faceDetector.close();
+      final InputImage visionImage = InputImage.fromFile(File(savedImg.path));
+      final List<Face> faces = await faceDetector_acc.processImage(visionImage);
 
       // STEP2: Get faces
       for (Face face in faces) {
@@ -332,25 +333,19 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         if (!lock) {
           lock = true;
           // STEP1: Initialize Firebase faceDetector
-          final FirebaseVisionImageMetadata metadata =
-              FirebaseVisionImageMetadata(
-                  rawFormat: cameraImg.format.raw,
+          final WriteBuffer allBytes = WriteBuffer();
+          for (Plane plane in cameraImg.planes) {
+            allBytes.putUint8List(plane.bytes);
+          }
+          final bytes = allBytes.done().buffer.asUint8List();
+          final InputImage visionImage = InputImage.fromBytes(
+              bytes: bytes,
+              inputImageData: InputImageData(
                   size: Size(
                       cameraImg.width.toDouble(), cameraImg.height.toDouble()),
-                  planeData: cameraImg.planes
-                      .map((currentPlane) => FirebaseVisionImagePlaneMetadata(
-                          bytesPerRow: currentPlane.bytesPerRow,
-                          height: currentPlane.height,
-                          width: currentPlane.width))
-                      .toList(),
-                  rotation: ImageRotation.rotation90);
-
-          final FirebaseVisionImage visionImage = FirebaseVisionImage.fromBytes(
-              cameraImg.planes[0].bytes, metadata);
-          FaceDetector faceDetector = FirebaseVision.instance
-              .faceDetector(FaceDetectorOptions(minFaceSize: 0.25));
-          final List<Face> faces = await faceDetector.processImage(visionImage);
-          faceDetector.close();
+                  imageRotation: InputImageRotation.Rotation_90deg));
+          final List<Face> faces =
+              await faceDetector_fast.processImage(visionImage);
 
           img.Image convertedImg = ImageUtils.convertCameraImage(cameraImg);
           // STEP2: Get faces

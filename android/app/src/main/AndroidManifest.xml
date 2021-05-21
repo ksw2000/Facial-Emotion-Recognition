@@ -29,9 +29,9 @@
               />
 
             <!--for firebase face detection-->
-            <meta-data
+            <!--meta-data
                 android:name="com.google.firebase.ml.vision.DEPENDENCIES"
-                android:value="face" />
+                android:value="face" /-->
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
