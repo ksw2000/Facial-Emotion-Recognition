@@ -94,7 +94,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   String text = "";
   List<Widget> defaultWidgetList, widgetList;
   FlutterSoundRecorder myRecorder;
-  var myPlayer;
+  FlutterSoundPlayer myPlayer;
   double ratio = 1;
   var cameraCtrl;
   bool isNowStream = false;
@@ -183,6 +183,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                     var recordingDataController = StreamController<Food>();
                     recordingDataController.stream.listen((buffer) {
                       if (buffer is FoodData) {
+                        print(buffer.data);
                         sink.add(buffer.data);
                       }
                     });
@@ -198,11 +199,15 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                       recordingDataController.close();
                       sink.close();
                       print("done!");
-                      await myPlayer.openAudioSession();
-                      await myPlayer.startPlayer(
-                        fromURI: _mPath,
-                        codec: Codec.pcm16,
-                      );
+                      // detect
+                      // convert to mfcc
+                      if (!myPlayer.isOpen()) {
+                        await myPlayer.openAudioSession();
+                        await myPlayer.startPlayer(
+                          fromURI: _mPath,
+                          codec: Codec.pcm16,
+                        );
+                      }
                     });
                   },
                 ),

@@ -30,7 +30,7 @@ android {
     compileSdkVersion 30
 
     dependencies {
-        api 'com.google.firebase:firebase-ml-vision-face-model:20.0.2'
+        implementation 'com.google.firebase:firebase-ml-vision:24.0.3'
     }
 
     sourceSets {

@@ -31,7 +31,7 @@
             <!--for firebase face detection-->
             <meta-data
                 android:name="com.google.firebase.ml.vision.DEPENDENCIES"
-                android:value="ocr" />
+                android:value="face" />
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -45,4 +45,6 @@
             android:value="2" />
     </application>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 </manifest>
