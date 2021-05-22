@@ -293,18 +293,31 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                             fontSize: 20, backgroundColor: Colors.blue)))));
           });
         }
+        // run model1 with rotation
+        if (cls.interpreter != null) {
+          img.Image resizedImg = ImagePrehandle.resize(croppedImg,
+              w: cls.inputShape[1], h: cls.inputShape[2]);
+          img.Image rotationedImg =
+              ImagePrehandle.rotation(resizedImg, rotation: 270);
+
+          var input = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
+              rotationedImg,
+              w: cls.inputShape[1],
+              h: cls.inputShape[2]));
+          print("with rotation");
+          print(facialLabel[cls.run([input])]);
+        }
 
         // run model2
         if (cls2.interpreter != null) {
           img.Image resizedImg = ImagePrehandle.resize(croppedImg,
-              w: cls.inputShape[1], h: cls.inputShape[2]);
+              w: cls2.inputShape[1], h: cls2.inputShape[2]);
 
-          var input2 = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
+          var input = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
               resizedImg,
               w: cls2.inputShape[1],
               h: cls2.inputShape[2]));
-          var output2 = cls2.run([input2]);
-          print(facialLabel[output2]);
+          print(facialLabel[cls2.run([input])]);
         }
       } // screen width : photo width
     } catch (e) {
