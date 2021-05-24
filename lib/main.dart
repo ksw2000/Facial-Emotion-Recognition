@@ -3,18 +3,25 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_sound/flutter_sound.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image/image.dart' as img;
+import 'package:tflite_audio/tflite_audio.dart';
 import './classifier.dart';
 import './prehandle.dart';
 import './imageConvert.dart';
-import 'package:path_provider/path_provider.dart';
 
-const String facialModel = 'fe93.tflite';
-const String facialModel2 = 'fe80.tflite';
+const facialModel = 'fe93.tflite';
+const facialModel2 = 'fe80.tflite';
+
+const sampleRate = 44100; //16000;
+const recordingLength = 2500; //16000;
+const bufferSize = 100; //2000;
+const audioModel = 'assets/ae94.tflite'; //decoded_wav_model.tflite';
+const audioLabel = 'assets/audio_label.txt'; //decoded_wav_label.txt';
 
 const facialLabel = ['驚訝', '怕爆', '覺得噁心', '開心', '傷心', '生氣', '無'];
+CameraDescription camera;
+CameraController cameraCtrl;
 
 Future<void> main() async {
   // Ensure that plugin services are initialized so that `availableCameras()`
@@ -23,21 +30,26 @@ Future<void> main() async {
 
   // Obtain a list of the available cameras on the device.
   final cameras = await availableCameras();
-  runApp(Main(camera: cameras.first));
+  camera = cameras.first;
+  runApp(Main());
 }
 
 class Main extends StatefulWidget {
-  Main({this.camera});
-  final camera;
+  Main();
   _MainState createState() => _MainState();
 }
 
 class _MainState extends State<Main> with WidgetsBindingObserver {
-  CameraController cameraCtrl;
+  @override
+  void initState() {
+    cameraCtrl = CameraController(camera, ResolutionPreset.high);
+    super.initState();
+  }
 
-  Future _initialize() async {
-    cameraCtrl = CameraController(widget.camera, ResolutionPreset.high);
-    return cameraCtrl.initialize();
+  @override
+  void dispose() {
+    cameraCtrl?.dispose();
+    super.dispose();
   }
 
   @override
@@ -47,14 +59,16 @@ class _MainState extends State<Main> with WidgetsBindingObserver {
       return;
     }
     if (state == AppLifecycleState.inactive) {
+      print("------------------------inactive------------------------");
       cameraCtrl?.dispose();
     } else if (state == AppLifecycleState.resumed) {
       print("------------------------resumed------------------------");
-      if (cameraCtrl != null) {
-        cameraCtrl =
-            CameraController(widget.camera, ResolutionPreset.high, // 1280x720
-                enableAudio: true);
-      }
+      //if (cameraCtrl != null) {
+      cameraCtrl =
+          CameraController(camera, ResolutionPreset.high, enableAudio: true);
+      //}
+    } else {
+      print(state);
     }
   }
 
@@ -64,12 +78,11 @@ class _MainState extends State<Main> with WidgetsBindingObserver {
         home: Scaffold(
             body: SafeArea(
                 child: FutureBuilder<void>(
-                    future: _initialize(),
+                    future: cameraCtrl.initialize(),
                     builder: (BuildContext context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done) {
-                        return TakePictureScreen(
-                          cameraCtrl: cameraCtrl,
-                        );
+                      if (snapshot.connectionState == ConnectionState.done &&
+                          cameraCtrl != null) {
+                        return TakePictureScreen();
                       } else {
                         return Center(child: CircularProgressIndicator());
                       }
@@ -79,8 +92,7 @@ class _MainState extends State<Main> with WidgetsBindingObserver {
 
 // A screen that allows users to take a picture using a given camera.
 class TakePictureScreen extends StatefulWidget {
-  final cameraCtrl;
-  const TakePictureScreen({this.cameraCtrl});
+  const TakePictureScreen();
 
   @override
   TakePictureScreenState createState() => TakePictureScreenState();
@@ -89,21 +101,17 @@ class TakePictureScreen extends StatefulWidget {
 class TakePictureScreenState extends State<TakePictureScreen> {
   String text = "";
   List<Widget> defaultWidgetList, widgetList;
-  FlutterSoundRecorder myRecorder;
-  FlutterSoundPlayer myPlayer;
   double ratio = 1;
-  var cameraCtrl;
   bool isNowStream = false;
   bool isNowBusy = false;
   FaceDetector faceDetector_acc;
   FaceDetector faceDetector_fast;
+  bool isRecording = false;
 
   @override
   void initState() {
     super.initState();
-    cameraCtrl = widget.cameraCtrl;
-    myRecorder = FlutterSoundRecorder();
-    myPlayer = FlutterSoundPlayer();
+    TfliteAudio.loadModel(model: audioModel, label: audioLabel);
     faceDetector_acc = GoogleMlKit.vision.faceDetector(FaceDetectorOptions(
       mode: FaceDetectorMode.accurate,
     ));
@@ -113,8 +121,8 @@ class TakePictureScreenState extends State<TakePictureScreen> {
 
   @override
   void dispose() {
-    faceDetector_acc.close();
-    faceDetector_fast.close();
+    faceDetector_acc?.close();
+    faceDetector_fast?.close();
     super.dispose();
   }
 
@@ -154,7 +162,9 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                   child: Icon(
                       isNowBusy
                           ? Icons.cached
-                          : (isNowStream ? Icons.stop : Icons.stream),
+                          : (cameraCtrl.value.isStreamingImages
+                              ? Icons.stop
+                              : Icons.stream),
                       size: 30),
                   onTap: () async {
                     if (isNowStream) {
@@ -182,38 +192,37 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                 decoration:
                     BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
                 child: InkWell(
-                  child: Icon(Icons.graphic_eq, size: 30),
-                  onTap: () async {
-                    var sink = await createFile();
-                    var recordingDataController = StreamController<Food>();
-                    recordingDataController.stream.listen((buffer) {
-                      if (buffer is FoodData) {
-                        print(buffer.data);
-                        sink.add(buffer.data);
-                      }
-                    });
-
-                    await myRecorder.openAudioSession();
-                    await myRecorder.startRecorder(
-                        codec: Codec.pcm16,
-                        toStream: recordingDataController.sink);
-
-                    Timer(Duration(seconds: 5), () async {
-                      await myRecorder.stopRecorder();
-                      await myRecorder.closeAudioSession();
-                      recordingDataController.close();
-                      sink.close();
-                      print("done!");
-                      // detect
-                      // convert to mfcc
-                      if (!myPlayer.isOpen()) {
-                        await myPlayer.openAudioSession();
-                      }
-                      await myPlayer.startPlayer(
-                        fromURI: _mPath,
-                        codec: Codec.pcm16,
+                  child: Icon((isRecording) ? Icons.stop : Icons.graphic_eq,
+                      size: 30),
+                  onTap: () {
+                    if (!isRecording) {
+                      setState(() {
+                        isRecording = true;
+                      });
+                      var result = TfliteAudio.startAudioRecognition(
+                        numOfInferences: 1,
+                        inputType: 'decodedWav',
+                        sampleRate: sampleRate,
+                        recordingLength: recordingLength,
+                        bufferSize: bufferSize,
                       );
-                    });
+                      result.listen((event) {
+                        print("listen");
+                        print(event);
+                        print(event['recognitionResult']);
+                      }).onDone(() {
+                        TfliteAudio.stopAudioRecognition();
+                        print("TfliteAudio() done!");
+                        setState(() {
+                          isRecording = false;
+                        });
+                      });
+                    } else {
+                      TfliteAudio.stopAudioRecognition();
+                      setState(() {
+                        isRecording = false;
+                      });
+                    }
                   },
                 ),
               ),
@@ -224,24 +233,10 @@ class TakePictureScreenState extends State<TakePictureScreen> {
     return Stack(children: widgetList ?? defaultWidgetList);
   }
 
-  var _mPath;
-
-  Future<IOSink> createFile() async {
-    var dir = await getApplicationDocumentsDirectory();
-    _mPath = '${dir.path}/flutter_sound_example.pcm';
-    var outputFile = File(_mPath);
-    if (outputFile.existsSync()) {
-      await outputFile.delete();
-    }
-    return outputFile.openWrite();
-  }
-
   Future facialEmotionDetect() async {
     widgetList = defaultWidgetList;
     Classifier cls = Classifier();
-    Classifier cls2 = Classifier();
     await cls.loadModel(facialModel);
-    await cls2.loadModel(facialModel2);
 
     try {
       // STEP0: Take a shot
@@ -266,7 +261,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         print("left: ${boundingBox.left}");
 
         img.Image croppedImg = ImagePrehandle.crop(cameraImg,
-            y: (cameraImg.width - boundingBox.right).toInt(),
+            y: (cameraImg.height - boundingBox.right).toInt(),
             x: boundingBox.top.toInt(),
             w: faceRange.toInt(),
             h: faceRange.toInt());
@@ -275,9 +270,10 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         if (cls.interpreter != null) {
           img.Image resizedImg = ImagePrehandle.resize(croppedImg,
               w: cls.inputShape[1], h: cls.inputShape[2]);
+          var input = ImagePrehandle.uint32ListToRGB3D(resizedImg);
+          var output = cls.run([input]);
 
-          var input1 = ImagePrehandle.uint32ListToRGB3D(resizedImg);
-          var output1 = cls.run([input1]);
+          print(facialLabel[output]);
           setState(() {
             widgetList.add(Box(
                 right: cameraImg.height - boundingBox.right,
@@ -286,38 +282,15 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                 width: boundingBox.right - boundingBox.left,
                 ratio: ratio,
                 child: Positioned(
-                    top: -35,
+                    top: -50,
                     left: 0,
-                    child: Text("${facialLabel[output1]}",
-                        style: TextStyle(
-                            fontSize: 20, backgroundColor: Colors.blue)))));
+                    child: Column(children: [
+                      Image.memory(img.JpegEncoder().encodeImage(resizedImg)),
+                      Text("${facialLabel[output]}",
+                          style: TextStyle(
+                              fontSize: 20, backgroundColor: Colors.blue))
+                    ]))));
           });
-        }
-        // run model1 with rotation
-        if (cls.interpreter != null) {
-          img.Image resizedImg = ImagePrehandle.resize(croppedImg,
-              w: cls.inputShape[1], h: cls.inputShape[2]);
-          img.Image rotationedImg =
-              ImagePrehandle.rotation(resizedImg, rotation: 270);
-
-          var input = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
-              rotationedImg,
-              w: cls.inputShape[1],
-              h: cls.inputShape[2]));
-          print("with rotation");
-          print(facialLabel[cls.run([input])]);
-        }
-
-        // run model2
-        if (cls2.interpreter != null) {
-          img.Image resizedImg = ImagePrehandle.resize(croppedImg,
-              w: cls2.inputShape[1], h: cls2.inputShape[2]);
-
-          var input = ImagePrehandle.uint32ListToRGB3D(ImagePrehandle.resize(
-              resizedImg,
-              w: cls2.inputShape[1],
-              h: cls2.inputShape[2]));
-          print(facialLabel[cls2.run([input])]);
         }
       } // screen width : photo width
     } catch (e) {
