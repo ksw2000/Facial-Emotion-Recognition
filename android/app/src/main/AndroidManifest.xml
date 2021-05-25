@@ -28,11 +28,6 @@
               android:resource="@drawable/launch_background"
               />
 
-            <!--for firebase face detection-->
-            <!--meta-data
-                android:name="com.google.firebase.ml.vision.DEPENDENCIES"
-                android:value="face" /-->
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
