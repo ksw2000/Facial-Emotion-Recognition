@@ -19,7 +19,7 @@ const bufferSize = 100; //2000;
 const audioModel = 'assets/ae94.tflite'; //decoded_wav_model.tflite';
 const audioLabel = 'assets/audio_label.txt'; //decoded_wav_label.txt';
 
-const facialLabel = ['驚訝', '怕爆', '覺得噁心', '開心', '傷心', '生氣', '無'];
+const facialLabel = ['驚喜', '害怕', '噁心', '開心', '傷心', '生氣', '無'];
 CameraDescription camera;
 
 bool realTimeModePrepare =
@@ -42,7 +42,7 @@ class Main extends StatefulWidget {
 }
 
 ValueNotifier<CameraController> _cameraCtrl = ValueNotifier<CameraController>(
-    CameraController(camera, ResolutionPreset.max));
+    CameraController(camera, ResolutionPreset.veryHigh));
 
 class _MainState extends State<Main> with AutomaticKeepAliveClientMixin {
   @override
@@ -167,13 +167,10 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                           _cameraCtrl.value.dispose();
                         }
                         _cameraCtrl.value =
-                            CameraController(camera, ResolutionPreset.max);
-                        _cameraCtrl.addListener(() {
-                          if (mounted) {
-                            setState(() {
-                              realTimeModePrepare = false;
-                            });
-                          }
+                            CameraController(camera, ResolutionPreset.veryHigh);
+                        setState(() {
+                          print("------------退回?------------");
+                          realTimeModePrepare = false;
                         });
                       }
 
@@ -269,39 +266,42 @@ class TakePictureScreenState extends State<TakePictureScreen> {
         print("right: ${boundingBox.right}");
         print("left: ${boundingBox.left}");
 
-        img.Image croppedImg = ImagePrehandle.crop(cameraImg,
-            y: (cameraImg.height - boundingBox.right).toInt(),
-            x: boundingBox.top.toInt(),
-            w: faceRange.toInt(),
-            h: faceRange.toInt());
+        img.Image croppedImg = img.copyCrop(
+            cameraImg,
+            boundingBox.top.toInt(),
+            (cameraImg.height - boundingBox.right).toInt(),
+            faceRange.toInt(),
+            faceRange.toInt());
 
-        // run model 1
         if (cls.interpreter != null) {
-          img.Image resizedImg = ImagePrehandle.resize(croppedImg,
-              w: cls.inputShape[1], h: cls.inputShape[2]);
+          img.Image resizedImg = img.copyResize(croppedImg,
+              width: cls.inputShape[1], height: cls.inputShape[1]);
+
           var input = ImagePrehandle.uint32ListToRGB3D(resizedImg);
           var output = cls.run([input]);
 
           print(facialLabel[output]);
-          setState(() {
-            widgetList.add(Box(
-                x: boundingBox.left,
-                y: boundingBox.top,
-                height: boundingBox.bottom - boundingBox.top,
-                width: boundingBox.right - boundingBox.left,
-                ratio: MediaQuery.of(context).size.width / cameraImg.height,
-                child: Positioned(
-                    top: -50,
-                    left: 0,
-                    child: Column(children: [
-                      Image.memory(img.JpegEncoder().encodeImage(resizedImg)),
-                      Text("${facialLabel[output]}",
-                          style: TextStyle(
-                              fontSize: 20, backgroundColor: Colors.blue))
-                    ]))));
-          });
+
+          widgetList.add(Box(
+              x: boundingBox.left,
+              y: boundingBox.top,
+              height: boundingBox.bottom - boundingBox.top,
+              width: boundingBox.right - boundingBox.left,
+              ratio: MediaQuery.of(context).size.width / cameraImg.height,
+              child: Positioned(
+                  top: -50,
+                  left: 0,
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Image.memory(img.JpegEncoder().encodeImage(resizedImg)),
+                        Text("${facialLabel[output]}",
+                            style: TextStyle(
+                                fontSize: 18, backgroundColor: Colors.blue))
+                      ]))));
         }
-      } // screen width : photo width
+      }
+      setState(() {});
     } on CameraException {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
@@ -313,6 +313,10 @@ class TakePictureScreenState extends State<TakePictureScreen> {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
             },
           )));
+
+      // update
+      _cameraCtrl.value?.dispose();
+      _cameraCtrl.value = CameraController(camera, ResolutionPreset.veryHigh);
     } catch (e) {
       print("facialEmotionDetect() $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -332,20 +336,22 @@ class TakePictureScreenState extends State<TakePictureScreen> {
     Classifier cls = Classifier();
     await cls.loadModel(facialModel);
     if (!realTimeModePrepare) {
-      if (_cameraCtrl.value != null) {
-        _cameraCtrl.value.dispose();
-      }
-      var newCameraCtrl = CameraController(camera, ResolutionPreset.high);
+      // 先 dispose 再 直接叫一個新的
+      // 會嗔錯，但能用
+      _cameraCtrl.value?.dispose();
+      //var newCameraCtrl =
       realTimeModePrepare = true;
-      _cameraCtrl.value = newCameraCtrl;
+      _cameraCtrl.value = CameraController(camera, ResolutionPreset.low);
     } else {
       bool lock = false;
       try {
         // STEP0: start camera image stream
+        int counter = 0;
         _cameraCtrl.value.startImageStream((CameraImage cameraImg) async {
           widgetList = defaultWidgetList;
           if (!lock) {
             lock = true;
+            counter++;
             // STEP1: Initialize Firebase faceDetector
             final WriteBuffer allBytes = WriteBuffer();
             for (Plane plane in cameraImg.planes) {
@@ -361,48 +367,49 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                 await faceDetectorFast.processImage(visionImage);
 
             img.Image convertedImg = ImageUtils.convertCameraImage(cameraImg);
+            img.Image rotationImg = img.copyRotate(convertedImg, 90);
+
             // STEP2: Get faces
             for (Face face in faces) {
               final Rect boundingBox = face.boundingBox;
               double faceRange = boundingBox.bottom - boundingBox.top;
-              img.Image inputImg = ImagePrehandle.crop(convertedImg,
-                  y: cameraImg.height.toInt() - boundingBox.right.toInt(),
-                  x: boundingBox.top.toInt(),
-                  w: faceRange.toInt(),
-                  h: faceRange.toInt());
 
               if (cls.interpreter != null) {
-                img.Image rotationImg =
-                    ImagePrehandle.rotation(inputImg, rotation: 90);
+                img.Image croppedImage = img.copyCrop(
+                    rotationImg,
+                    boundingBox.left.toInt(),
+                    boundingBox.top.toInt(),
+                    faceRange.toInt(),
+                    faceRange.toInt());
 
-                img.Image resizedImg = ImagePrehandle.resize(rotationImg,
-                    w: cls.inputShape[1], h: cls.inputShape[2]);
+                img.Image resultImage = img.copyResize(croppedImage,
+                    width: cls.inputShape[1], height: cls.inputShape[2]);
 
-                var input = ImagePrehandle.uint32ListToRGB3D(resizedImg);
+                var input = ImagePrehandle.uint32ListToRGB3D(resultImage);
                 var output = cls.run([input]);
                 print(facialLabel[output]);
 
-                setState(() {
-                  widgetList.add(Box.square(
-                      x: boundingBox.left,
-                      y: boundingBox.top,
-                      side: boundingBox.bottom - boundingBox.top,
-                      ratio:
-                          MediaQuery.of(context).size.width / cameraImg.height,
-                      child: Positioned(
-                          top: -50,
-                          left: 0,
-                          child: Column(children: [
-                            Image.memory(
-                                img.JpegEncoder().encodeImage(resizedImg)),
-                            Text("${facialLabel[output]}",
-                                style: TextStyle(
-                                    fontSize: 20, backgroundColor: Colors.blue))
-                          ]))));
-                });
+                widgetList.add(Box.square(
+                    x: boundingBox.left,
+                    y: boundingBox.top,
+                    side: boundingBox.bottom - boundingBox.top,
+                    ratio: MediaQuery.of(context).size.width / cameraImg.height,
+                    child: Positioned(
+                        top: -25,
+                        left: 0,
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("${facialLabel[output]}",
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      backgroundColor: Colors.blue))
+                            ]))));
               }
             }
+            setState(() {});
             lock = false;
+            print("$counter");
           }
         });
       } catch (e) {

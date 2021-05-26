@@ -23,18 +23,6 @@ class ImagePrehandle {
     return rgb;
   }
 
-  static img.Image crop(img.Image src, {int x, int y, int w, int h}) {
-    return img.copyCrop(src, x, y, w, h);
-  }
-
-  static img.Image resize(img.Image src, {int w, int h}) {
-    return img.copyResize(src, width: w, height: h);
-  }
-
-  static img.Image rotation(img.Image src, {num rotation}) {
-    return img.copyRotate(src, rotation);
-  }
-
   static img.Image convertYUV420(CameraImage image) {
     var ret = img.Image(image.width, image.height); // Create Image buffer
 
