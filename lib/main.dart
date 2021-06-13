@@ -5,19 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image/image.dart' as img;
-import 'package:tflite_audio/tflite_audio.dart';
 import './classifier.dart';
-import './prehandle.dart';
+import './preprocessing.dart';
 import './imageConvert.dart';
 
 const facialModel = 'fe93.tflite';
-const facialModel2 = 'fe80.tflite';
-
-const sampleRate = 44100; //16000;
-const recordingLength = 2500; //16000;
-const bufferSize = 100; //2000;
-const audioModel = 'assets/ae94.tflite'; //decoded_wav_model.tflite';
-const audioLabel = 'assets/audio_label.txt'; //decoded_wav_label.txt';
 
 const facialLabel = ['驚喜', '害怕', '噁心', '開心', '傷心', '生氣', '無'];
 CameraDescription camera;
@@ -105,7 +97,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
   @override
   void initState() {
     super.initState();
-    TfliteAudio.loadModel(model: audioModel, label: audioLabel);
     faceDetectorAcc = GoogleMlKit.vision.faceDetector(FaceDetectorOptions(
       mode: FaceDetectorMode.accurate,
     ));
@@ -186,47 +177,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
                       await realTimeFacialEmotionDetect();
                       setState(() {
                         isNowBusy = false;
-                      });
-                    }
-                  },
-                ),
-              ),
-              SizedBox(width: 10),
-              // detect emotion by audio
-              Container(
-                padding: EdgeInsets.all(15),
-                decoration:
-                    BoxDecoration(shape: BoxShape.circle, color: Colors.blue),
-                child: InkWell(
-                  child: Icon((isRecording) ? Icons.stop : Icons.graphic_eq,
-                      size: 30),
-                  onTap: () {
-                    if (!isRecording) {
-                      setState(() {
-                        isRecording = true;
-                      });
-                      var result = TfliteAudio.startAudioRecognition(
-                        numOfInferences: 1,
-                        inputType: 'decodedWav',
-                        sampleRate: sampleRate,
-                        recordingLength: recordingLength,
-                        bufferSize: bufferSize,
-                      );
-                      result.listen((event) {
-                        print("listen");
-                        print(event);
-                        print(event['recognitionResult']);
-                      }).onDone(() {
-                        TfliteAudio.stopAudioRecognition();
-                        print("TfliteAudio() done!");
-                        setState(() {
-                          isRecording = false;
-                        });
-                      });
-                    } else {
-                      TfliteAudio.stopAudioRecognition();
-                      setState(() {
-                        isRecording = false;
                       });
                     }
                   },
@@ -339,7 +289,6 @@ class TakePictureScreenState extends State<TakePictureScreen> {
       // 先 dispose 再 直接叫一個新的
       // 會嗔錯，但能用
       _cameraCtrl.value?.dispose();
-      //var newCameraCtrl =
       realTimeModePrepare = true;
       _cameraCtrl.value = CameraController(camera, ResolutionPreset.low);
     } else {
