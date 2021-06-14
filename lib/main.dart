@@ -301,7 +301,7 @@ class TakePictureScreenState extends State<TakePictureScreen> {
           if (!lock) {
             lock = true;
             counter++;
-            // STEP1: Initialize Firebase faceDetector
+            // STEP1: Initialize Google ml kit faceDetector
             final WriteBuffer allBytes = WriteBuffer();
             for (Plane plane in cameraImg.planes) {
               allBytes.putUint8List(plane.bytes);
